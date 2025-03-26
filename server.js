@@ -2,7 +2,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-const robot = require("robotjs");
+const { mouse, Point } = require("@nut-tree-fork/nut-js"); // Importando Nut.js para controle do mouse
 
 const app = express();
 const server = http.createServer(app);
@@ -14,6 +14,11 @@ const io = new Server(server, {
 
 app.use(cors());
 let activeRooms = {}; // Armazena as salas ativas e seu estado
+
+// Função para mover o mouse com o Nut.js
+async function moveMouse(x, y) {
+  await mouse.move(new Point(x, y)); // Move o mouse para as coordenadas (x, y)
+}
 
 io.on("connection", (socket) => {
   console.log("Novo usuário conectado");
@@ -39,9 +44,14 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("moveMouse", ({ roomId, x, y }) => {
+  socket.on("moveMouse", async ({ roomId, x, y }) => {
     if (activeRooms[roomId]?.allowed) {
-      robot.moveMouse(x, y);
+      try {
+        // Mover o mouse se a sala permitir
+        await moveMouse(x, y);
+      } catch (error) {
+        console.error("Erro ao mover o mouse:", error);
+      }
     }
   });
 
