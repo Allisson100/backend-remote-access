@@ -13,6 +13,11 @@ const io = new Server(server, {
 });
 
 app.use(cors());
+
+app.get("/", (req, res) => {
+  res.send("OPA");
+});
+
 let activeRooms = {}; // Armazena as salas ativas e seu estado
 
 // Função para mover o mouse com o Nut.js
