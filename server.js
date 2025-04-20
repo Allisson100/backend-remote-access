@@ -2,7 +2,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-const { mouse, Point } = require("@nut-tree-fork/nut-js"); // Importando Nut.js para controle do mouse
+const robot = require("robotjs");
 
 const app = express();
 const server = http.createServer(app);
@@ -10,6 +10,7 @@ const io = new Server(server, {
   cors: {
     origin: "*",
   },
+  allowEIO3: true,
 });
 
 app.use(cors());
@@ -18,50 +19,108 @@ app.get("/", (req, res) => {
   res.send("OPA");
 });
 
-let activeRooms = {}; // Armazena as salas ativas e seu estado
-
-// Função para mover o mouse com o Nut.js
-async function moveMouse(x, y) {
-  await mouse.move(new Point(x, y)); // Move o mouse para as coordenadas (x, y)
-}
+// Armazena a sala ativa com o estado e os sockets conectados
+let activeRoom = {
+  id: null,
+  controlAllowed: true,
+  sender: null,
+  receiver: null,
+};
 
 io.on("connection", (socket) => {
-  console.log("Novo usuário conectado");
+  console.log("Novo usuário conectado" + socket.id);
 
+  // O client entra na sala informada
   socket.on("joinRoom", (roomId) => {
-    if (!activeRooms[roomId]) {
+    if (activeRoom.id !== roomId) {
       socket.emit("roomNotFound");
       return;
     }
+    activeRoom.receiver = socket;
     socket.join(roomId);
-    console.log(`Usuário entrou na sala ${roomId}`);
+    console.log(`Client entrou na sala ${roomId}`);
+
+    activeRoom.sender.emit("clientConnected");
   });
 
+  // O host cria a sala
   socket.on("createRoom", (roomId) => {
-    activeRooms = {}; // Remove todas as salas anteriores
-    activeRooms[roomId] = { allowed: true }; // Cria nova sala
-    console.log(`Nova sala criada: ${roomId}`);
+    activeRoom = {
+      id: roomId,
+      controlAllowed: true,
+      sender: socket,
+      receiver: null,
+    };
+    socket.join(roomId);
+    console.log(`Sala criada: ${roomId}`);
   });
 
+  // Alterna o controle do mouse
   socket.on("toggleControl", ({ roomId, allowed }) => {
-    if (activeRooms[roomId]) {
-      activeRooms[roomId].allowed = allowed;
+    if (activeRoom.id === roomId) {
+      activeRoom.controlAllowed = allowed;
     }
   });
 
-  socket.on("moveMouse", async ({ roomId, x, y }) => {
-    if (activeRooms[roomId]?.allowed) {
-      try {
-        // Mover o mouse se a sala permitir
-        await moveMouse(x, y);
-      } catch (error) {
-        console.error("Erro ao mover o mouse:", error);
-      }
+  // Movimento do mouse: somente se permitido
+  socket.on("moveMouse", ({ roomId, x, y }) => {
+    if (activeRoom.id === roomId && activeRoom.controlAllowed) {
+      robot.moveMouse(x, y);
+    }
+  });
+
+  // Simular clique do mouse
+  socket.on("mouseDown", (data) => {
+    robot.mouseClick();
+  });
+
+  // Simular pressionamento de tecla
+  // socket.on("keyboardEvent", (data) => {
+  //   robot.keyTap(data.key);
+  // });
+
+  socket.on("offer", (offer) => {
+    socket.broadcast.emit("offer", offer);
+  });
+
+  socket.on("answer", (answer) => {
+    socket.broadcast.emit("answer", answer);
+  });
+
+  socket.on("ice-candidate", (candidate) => {
+    socket.broadcast.emit("ice-candidate", candidate);
+  });
+
+  socket.on("shareImage", ({ roomId, imageData }) => {
+    if (activeRoom.id === roomId && activeRoom.receiver) {
+      activeRoom.receiver.emit("displayImage", imageData);
+    }
+  });
+
+  socket.on("stopImageShare", ({ roomId }) => {
+    if (activeRoom.id === roomId && activeRoom.receiver) {
+      activeRoom.receiver.emit("hideImage");
+    }
+  });
+
+  socket.on("stopScreenSharing", ({ roomId }) => {
+    if (activeRoom.id === roomId && activeRoom.receiver) {
+      activeRoom.receiver.emit("stopStream");
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("Usuário desconectado");
+    if (
+      (activeRoom.sender && socket.id === activeRoom.sender.id) ||
+      (activeRoom.receiver && socket.id === activeRoom.receiver.id)
+    ) {
+      activeRoom = {
+        id: null,
+        controlAllowed: true,
+        sender: null,
+        receiver: null,
+      };
+    }
   });
 });
 
