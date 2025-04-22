@@ -27,6 +27,55 @@ let activeRoom = {
   receiver: null,
 };
 
+// CONTROLE DE LETRAS DO TECLADO
+const allowedKeys = new Set([
+  // Letras
+  ..."abcdefghijklmnopqrstuvwxyz",
+
+  // Números
+  ..."0123456789",
+
+  // Funções
+  ..."f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12".split(" "),
+
+  // Navegação / Controle
+  "enter",
+  "escape",
+  "backspace",
+  "tab",
+  "delete",
+  "insert",
+  "home",
+  "end",
+  "pageup",
+  "pagedown",
+  "up",
+  "down",
+  "left",
+  "right",
+  "space",
+  "printscreen",
+
+  // Modificadores
+  "shift",
+  "control",
+  "alt",
+  "command",
+
+  // Pontuação
+  "comma",
+  "period",
+  "slash",
+  "backslash",
+  "semicolon",
+  "quote",
+  "openbracket",
+  "closebracket",
+  "minus",
+  "equals",
+  "grave",
+]);
+
 io.on("connection", (socket) => {
   console.log("Novo usuário conectado" + socket.id);
 
@@ -65,7 +114,10 @@ io.on("connection", (socket) => {
   // Movimento do mouse: somente se permitido
   socket.on("moveMouse", ({ roomId, x, y }) => {
     if (activeRoom.id === roomId && activeRoom.controlAllowed) {
-      robot.moveMouse(x, y);
+      const screenSize = robot.getScreenSize();
+      const realX = Math.floor(x * screenSize.width);
+      const realY = Math.floor(y * screenSize.height);
+      robot.moveMouse(realX, realY);
     }
   });
 
@@ -74,11 +126,7 @@ io.on("connection", (socket) => {
     robot.mouseClick();
   });
 
-  // Simular pressionamento de tecla
-  // socket.on("keyboardEvent", (data) => {
-  //   robot.keyTap(data.key);
-  // });
-
+  //  ### CONEXÃO HOST E CLIENT PARA STREM DO VIDEO ###
   socket.on("offer", (offer) => {
     socket.broadcast.emit("offer", offer);
   });
@@ -90,22 +138,43 @@ io.on("connection", (socket) => {
   socket.on("ice-candidate", (candidate) => {
     socket.broadcast.emit("ice-candidate", candidate);
   });
+  //  ### CONEXÃO HOST E CLIENT PARA STREM DO VIDEO ###
 
+  // COMPARTILHA IMAGEM
   socket.on("shareImage", ({ roomId, imageData }) => {
     if (activeRoom.id === roomId && activeRoom.receiver) {
       activeRoom.receiver.emit("displayImage", imageData);
     }
   });
 
+  // PARA DE COMPARTILHAR IMAGEM
   socket.on("stopImageShare", ({ roomId }) => {
     if (activeRoom.id === roomId && activeRoom.receiver) {
       activeRoom.receiver.emit("hideImage");
     }
   });
 
+  // PARA COMPARTILHAMENTO DE VIDEO
   socket.on("stopScreenSharing", ({ roomId }) => {
     if (activeRoom.id === roomId && activeRoom.receiver) {
       activeRoom.receiver.emit("stopStream");
+    }
+  });
+
+  // TECLADO
+  socket.on("keyboard-type", (key) => {
+    if (!key || typeof key !== "string") return;
+
+    const keyLower = key.toLowerCase();
+
+    if (allowedKeys.has(keyLower)) {
+      try {
+        robot.keyTap(keyLower);
+      } catch (error) {
+        console.error(`Erro ao digitar tecla '${keyLower}':`, error);
+      }
+    } else {
+      console.warn(`Tecla não permitida: '${key}'`);
     }
   });
 
