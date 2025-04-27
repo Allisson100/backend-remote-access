@@ -1,8 +1,13 @@
+require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const robot = require("robotjs");
+const axios = require("axios");
+const ngrok = require("ngrok");
+const { killNgrokProcess } = require("./utils/killNgrokProcess");
+const { generateMotherboardHash } = require("./utils/generateMotherboardHash");
 
 const app = express();
 const server = http.createServer(app);
@@ -194,4 +199,37 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+server.listen(PORT, async () => {
+  try {
+    console.log(`Servidor rodando na porta ${PORT}`);
+
+    await killNgrokProcess();
+
+    const url = await ngrok.connect({
+      addr: PORT,
+    });
+
+    console.log(`URL pública Ngrok gerada: ${url}`);
+
+    const getHash = await generateMotherboardHash();
+
+    console.log("getHash", getHash);
+
+    const response = await axios.post(
+      `${process.env.SERVER_CONTROL_URL}/api/register-connection`,
+      {
+        clientId: process.env.CLIENT_ID,
+        ngrokUrl: url,
+        hash: getHash,
+      }
+    );
+
+    if (response?.status === 400 || response?.status === 401) {
+      throw new Error();
+    }
+
+    console.log("Link enviado para servidor de controle com sucesso!");
+  } catch (error) {
+    console.log("error", error);
+  }
+});
