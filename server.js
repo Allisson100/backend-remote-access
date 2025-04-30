@@ -30,6 +30,7 @@ let activeRoom = {
   controlAllowed: true,
   sender: null,
   receiver: null,
+  size: 0,
 };
 
 // CONTROLE DE LETRAS DO TECLADO
@@ -86,6 +87,12 @@ io.on("connection", (socket) => {
 
   // O client entra na sala informada
   socket.on("joinRoom", (roomId) => {
+    if (activeRoom.size === 1) {
+      console.log("Sala cheia");
+
+      return;
+    }
+
     if (activeRoom.id !== roomId) {
       socket.emit("roomNotFound");
       return;
@@ -95,6 +102,7 @@ io.on("connection", (socket) => {
     console.log(`Client entrou na sala ${roomId}`);
 
     activeRoom.sender.emit("clientConnected");
+    activeRoom.size = 1;
   });
 
   // O host cria a sala
@@ -127,8 +135,14 @@ io.on("connection", (socket) => {
   });
 
   // Simular clique do mouse
-  socket.on("mouseDown", (data) => {
+  socket.on("mouseDown", () => {
     robot.mouseClick();
+  });
+
+  socket.on("inputValueChange", (data) => {
+    const { roomId, value } = data;
+
+    socket.to(roomId).emit("inputValueChange", { roomId, value });
   });
 
   //  ### CONEXÃO HOST E CLIENT PARA STREM DO VIDEO ###
@@ -188,6 +202,8 @@ io.on("connection", (socket) => {
       (activeRoom.sender && socket.id === activeRoom.sender.id) ||
       (activeRoom.receiver && socket.id === activeRoom.receiver.id)
     ) {
+      socket.to(activeRoom?.id).emit("reset", {});
+
       activeRoom = {
         id: null,
         controlAllowed: true,
@@ -203,32 +219,39 @@ server.listen(PORT, async () => {
   try {
     console.log(`Servidor rodando na porta ${PORT}`);
 
-    await killNgrokProcess();
+    let url = null;
 
-    const url = await ngrok.connect({
-      addr: PORT,
-    });
+    if (process.env.ENVIRONMENT === "dev") {
+      await killNgrokProcess();
 
-    console.log(`URL pública Ngrok gerada: ${url}`);
+      url = await ngrok.connect({
+        addr: PORT,
+      });
 
-    const getHash = await generateMotherboardHash();
+      console.log(`URL pública Ngrok gerada: ${url}`);
 
-    console.log("getHash", getHash);
+      const getHash = await generateMotherboardHash();
 
-    const response = await axios.post(
-      `${process.env.SERVER_CONTROL_URL}/api/register-connection`,
-      {
-        clientId: process.env.CLIENT_ID,
-        ngrokUrl: url,
-        hash: getHash,
+      console.log("getHash", getHash);
+
+      const response = await axios.post(
+        `${process.env.SERVER_CONTROL_URL}/api/register-connection`,
+        {
+          clientId: process.env.CLIENT_ID,
+          newUrl:
+            process.env.ENVIRONMENT === "dev"
+              ? `${process.env.PUBLIC_IP}:${process.env.PORT}`
+              : url,
+          hash: getHash,
+        }
+      );
+
+      if (response?.status === 400 || response?.status === 401) {
+        throw new Error();
       }
-    );
 
-    if (response?.status === 400 || response?.status === 401) {
-      throw new Error();
+      console.log("Link enviado para servidor de controle com sucesso!");
     }
-
-    console.log("Link enviado para servidor de controle com sucesso!");
   } catch (error) {
     console.log("error", error);
   }
