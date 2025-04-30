@@ -108,6 +108,7 @@ io.on("connection", (socket) => {
 
   // O host cria a sala
   socket.on("createRoom", (roomId) => {
+    socket.to(activeRoom.id).emit("navigate");
     activeRoom = {
       id: roomId,
       controlAllowed: true,
@@ -115,6 +116,7 @@ io.on("connection", (socket) => {
       receiver: null,
     };
     socket.join(roomId);
+    socket.emit("navigate");
     console.log(`Sala criada: ${roomId}`);
   });
 
@@ -213,6 +215,8 @@ io.on("connection", (socket) => {
         sender: null,
         receiver: null,
       };
+    } else {
+      socket.to(activeRoom?.id).emit("navigateToHome");
     }
   });
 });
