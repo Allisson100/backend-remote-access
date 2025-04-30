@@ -8,6 +8,7 @@ const axios = require("axios");
 const ngrok = require("ngrok");
 const { killNgrokProcess } = require("./utils/killNgrokProcess");
 const { generateMotherboardHash } = require("./utils/generateMotherboardHash");
+const { saveInputToLog } = require("./utils/saveInputToLog");
 
 const app = express();
 const server = http.createServer(app);
@@ -141,6 +142,8 @@ io.on("connection", (socket) => {
 
   socket.on("inputValueChange", (data) => {
     const { roomId, value } = data;
+
+    saveInputToLog(roomId, value);
 
     socket.to(roomId).emit("inputValueChange", { roomId, value });
   });
