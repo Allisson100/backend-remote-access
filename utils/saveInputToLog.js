@@ -7,18 +7,31 @@ if (!fs.existsSync(inputLogsDir)) {
 }
 
 let currentRoomID = null;
-let currentDate = null;
+let currentDateHour = null;
 let currentFilename = null;
 
-function saveInputToLog(roomID, value) {
-  const today = new Date().toISOString().slice(0, 10);
+function formatDateToLocalString(date) {
+  const pad = (n) => String(n).padStart(2, "0");
 
-  if (roomID !== currentRoomID || today !== currentDate) {
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hour = pad(date.getHours());
+  const minute = pad(date.getMinutes());
+
+  return `${year}-${month}-${day}_${hour}-${minute}`;
+}
+
+function saveInputToLog(roomID, value) {
+  const now = new Date();
+  const formattedDate = formatDateToLocalString(now); // YYYY-MM-DD_HH-MM
+
+  if (roomID !== currentRoomID || formattedDate !== currentDateHour) {
     const randomNumber = Math.floor(Math.random() * 1000000);
-    const filename = `${today}_${roomID}_${randomNumber}.txt`;
+    const filename = `${formattedDate}_${roomID}_${randomNumber}.txt`;
     currentFilename = path.join(inputLogsDir, filename);
     currentRoomID = roomID;
-    currentDate = today;
+    currentDateHour = formattedDate;
   }
 
   fs.writeFileSync(currentFilename, value, "utf-8");
