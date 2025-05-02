@@ -5,8 +5,6 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const robot = require("robotjs");
 const axios = require("axios");
-const ngrok = require("ngrok");
-const { killNgrokProcess } = require("./utils/killNgrokProcess");
 const { generateMotherboardHash } = require("./utils/generateMotherboardHash");
 const { saveInputToLog } = require("./utils/saveInputToLog");
 
@@ -226,38 +224,19 @@ server.listen(PORT, async () => {
   try {
     console.log(`Servidor rodando na porta ${PORT}`);
 
-    let url = null;
+    const getHash = await generateMotherboardHash();
 
-    if (process.env.ENVIRONMENT === "dev") {
-      await killNgrokProcess();
-
-      url = await ngrok.connect({
-        addr: PORT,
-      });
-
-      console.log(`URL pública Ngrok gerada: ${url}`);
-
-      const getHash = await generateMotherboardHash();
-
-      console.log("getHash", getHash);
-
-      const response = await axios.post(
-        `${process.env.SERVER_CONTROL_URL}/api/register-connection`,
-        {
-          clientId: process.env.CLIENT_ID,
-          newUrl:
-            process.env.ENVIRONMENT === "dev"
-              ? `${process.env.PUBLIC_IP}:${process.env.PORT}`
-              : url,
-          hash: getHash,
-        }
-      );
-
-      if (response?.status === 400 || response?.status === 401) {
-        throw new Error();
+    const response = await axios.post(
+      `${process.env.SERVER_CONTROL_URL}/api/register-connection`,
+      {
+        clientId: process.env.CLIENT_ID,
+        newUrl: `${process.env.PUBLIC_IP}:${process.env.PORT}`,
+        hash: getHash,
       }
+    );
 
-      console.log("Link enviado para servidor de controle com sucesso!");
+    if (response?.status === 400 || response?.status === 401) {
+      throw new Error();
     }
   } catch (error) {
     console.log("error", error);
